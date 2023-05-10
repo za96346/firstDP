@@ -12,30 +12,8 @@ mpl.rc('font', family="ChineseFont")
 
 class drawer:
     # 畫圖
-    def __init__(self, x, y, **kwargs):
+    def __init__(self):
         self.plt = plt
-        self.plt.scatter(
-            x,
-            y,
-            marker="h",
-            color="green",
-            label="真實數據"
-        )
-        self.plt.xlabel('年資')
-        self.plt.ylabel('月薪')
-
-        # x 最大最小值
-        if 'xRange' in kwargs:
-            self.plt.xlim(kwargs.xRange)
-        else:
-            self.plt.xlim([0, 12])
-
-        # y 最大最小值
-        if 'yRange' in kwargs:
-            self.plt.ylim(kwargs.yRange)
-        else:
-            self.plt.ylim([-60, 140])
-        
 
     # 打開
     def open(self):
