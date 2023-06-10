@@ -1,5 +1,6 @@
 import pandas as pandas
 import plot.index as plot
+import numpy as np
 
 url = './Salary_Data.csv'
 
@@ -46,7 +47,9 @@ class linear(plot.drawer):
 class lose(linear):
     def __init__(self, x, y) -> None:
         super().__init__(x, y)
-        self.costs = []
+        self.costs = np.zeros((201, 201))
+        self.ws = np.arange(0, 0)
+        self.bs = np.arange(0, 0)
 
     ## function lose
     ## (真實數據 - 預測值 的 平方)
@@ -62,17 +65,45 @@ class lose(linear):
     # 計算 lose
     # wRange = [start, end]
     # bRange = [start, end]
-    def computed(self, wRange, bRange):
-        for w in range(wRange[0], wRange[1]):
-            returnCost = self.loseFunction(w, 0)
-            self.costs.append(returnCost)
+    def computed_origin(self, wRange, bRange):
+        self.ws = np.arange(wRange[0], wRange[1])
+        self.bs = np.arange(bRange[0], bRange[1])
+
+        i = 0
+        for w in self.ws:
+            j = 0
+            for b in self.bs:
+                returnCost = self.loseFunction(w, b)
+                self.costs[i, j] = returnCost
+                j += 1
+            i += 1
 
     ## 繪圖 出 lose function
     def draw(self, wRange):
-        self.plt.scatter(range(wRange[0], wRange[1]), self.costs)
-        self.plt.ylabel = 'b'
-        self.plt.xlabel = 'w'
+        ax = self.plt.axes(projection = "3d")
+        ax.xaxis.set_pane_color((0,0,0))
+        ax.yaxis.set_pane_color((0,0,0))
+        ax.zaxis.set_pane_color((0,0,0))
+        ax.view_init(45, -120)
+
+        ax.set_title('w b 對應的 costs')
+        ax.set_xlabel('w')
+        ax.set_ylabel('b')
+        ax.set_ylabel('cost')
+
+
+        b_grid, w_grid = np.meshgrid(self.bs, self.ws)
+        ax.plot_surface(b_grid, w_grid, self.costs)
+
         self.plt.show()
+    
+    # 計算梯度下降
+    # w方向微分 後 = 2*x*(w*x + b) -y
+    # b方向微分 後 = 2*(w*x + b) -y
+    def computed_gradient(self, w, b):
+        w_gradient = 2 * self.x * (w * self.x + b) - self.y
+        b_gradient = 2 * (w * self.x + b) - self.y
+        print(w_gradient, b_gradient)
 
 class DP:
     def __init__(self, x, y) -> None:
@@ -83,5 +114,5 @@ if __name__ == '__main__':
     x = data['YearsExperience']
     y = data['Salary']
     dp = DP(x, y)
-    dp.lost.computed([-100, 101], 0)
-    dp.lost.draw([-100, 101])
+    dp.lost.computed_gradient([-100, 101], [-100, 101])
+    # dp.lost.draw([-100, 101])
