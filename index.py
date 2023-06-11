@@ -51,9 +51,11 @@ class lose(linear):
         self.ws = np.arange(0, 0)
         self.bs = np.arange(0, 0)
 
+        # gradient decent
         self.loseHistoryList = []
         self.wHistoryList = []
         self.bHistoryList = []
+        self.iteration = 1000
 
     ## function lose
     ## (真實數據 - 預測值 的 平方)
@@ -70,8 +72,8 @@ class lose(linear):
     # w方向微分 後 = 2*x*(w*x + b) -y
     # b方向微分 後 = 2*(w*x + b) -y
     def gradientFunction(self, w, b):
-        w_gradient = (2 * self.x * (w * self.x + b) - self.y).mean()
-        b_gradient = (2 * (w * self.x + b) - self.y).mean()
+        w_gradient = (2 * self.x * (w * self.x + b) - self.y).sum()/ len(self.x)
+        b_gradient = (2 * (w * self.x + b) - self.y).sum() / len(self.x)
         # print(w_gradient, b_gradient)
         return w_gradient, b_gradient
     
@@ -95,6 +97,7 @@ class lose(linear):
     def computed_gradient(self, wInit = 0, bInit = 0, iteration = 1000, learning_rate = 0.001):
         w = wInit
         b = bInit
+        self.iteration = iteration
         for i in range(iteration):
             w_gradient, b_gradient = self.gradientFunction(w, b)
 
@@ -114,24 +117,30 @@ class lose(linear):
     ## 繪圖 出 lose function
     def drawComputedLost(self, wRange):
         ax = self.plt.axes(projection = "3d")
-        ax.xaxis.set_pane_color((0,0,0))
-        ax.yaxis.set_pane_color((0,0,0))
-        ax.zaxis.set_pane_color((0,0,0))
-        ax.view_init(45, -120)
+        # ax.xaxis.set_pane_color((0,0,0))
+        # ax.yaxis.set_pane_color((0,0,0))
+        # ax.zaxis.set_pane_color((0,0,0))
+        ax.view_init(45, 60)
 
         ax.set_title('w b 對應的 costs')
         ax.set_xlabel('w')
         ax.set_ylabel('b')
         ax.set_ylabel('cost')
 
+        w_index, b_index = np.where(self.costs == np.min(self.costs))
 
         b_grid, w_grid = np.meshgrid(self.bs, self.ws)
-        ax.plot_surface(b_grid, w_grid, self.costs)
-
+        ax.plot_surface(b_grid, w_grid, self.costs, alpha=0.3)
+        ax.scatter(self.ws[w_index], self.bs[b_index], self.costs[w_index, b_index], color="red")
+        ax.scatter(self.wHistoryList[0], self.bHistoryList[0], self.loseHistoryList[0], color="green")
+        ax.plot(self.wHistoryList, self.bHistoryList, self.loseHistoryList)
         self.plt.show()
     
-    def drawComputedGredientDecent():
-        print()
+    def drawComputedGredientDecent(self):
+        self.plt.plot(np.arange(0, self.iteration), self.loseHistoryList)
+        self.plt.xlabel("更新次數")
+        self.plt.ylabel("cost")
+        self.plt.show()
 
 class DP:
     def __init__(self, x, y) -> None:
@@ -141,7 +150,10 @@ if __name__ == '__main__':
     data = pandas.read_csv(url)
     x = data['YearsExperience']
     y = data['Salary']
-    w = 0
-    b = 0
+    w = -100
+    b = -100
     dp = DP(x, y)
-    dp.lost.computed_gradient(w, b, 10000, 0.001)
+    dp.lost.computed_lose([-100, 101], [-100,101])
+    dp.lost.computed_gradient(w, b, 1000, 10)
+    # dp.lost.drawComputedGredientDecent()
+    dp.lost.drawComputedLost([])
