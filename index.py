@@ -18,7 +18,7 @@ class linear(plot.drawer):
         # self.plt.addLine(self.x, y_predict)
         return y_predict
     
-        ## 繪圖 出 真實數據
+    ## 繪圖 出 真實數據
     def draw(self, **kwargs):
         self.plt.scatter(
             self.x,
@@ -51,6 +51,10 @@ class lose(linear):
         self.ws = np.arange(0, 0)
         self.bs = np.arange(0, 0)
 
+        self.loseHistoryList = []
+        self.wHistoryList = []
+        self.bHistoryList = []
+
     ## function lose
     ## (真實數據 - 預測值 的 平方)
     ## lose = (y - y_predict)^2
@@ -61,11 +65,20 @@ class lose(linear):
 
         # plt.interact((-100, 10 0, 1), (100, 100, 1))
         # self.plt.open()
+
+    # 梯度下降 寒士
+    # w方向微分 後 = 2*x*(w*x + b) -y
+    # b方向微分 後 = 2*(w*x + b) -y
+    def gradientFunction(self, w, b):
+        w_gradient = (2 * self.x * (w * self.x + b) - self.y).mean()
+        b_gradient = (2 * (w * self.x + b) - self.y).mean()
+        # print(w_gradient, b_gradient)
+        return w_gradient, b_gradient
     
     # 計算 lose
     # wRange = [start, end]
     # bRange = [start, end]
-    def computed_origin(self, wRange, bRange):
+    def computed_lose(self, wRange, bRange):
         self.ws = np.arange(wRange[0], wRange[1])
         self.bs = np.arange(bRange[0], bRange[1])
 
@@ -78,8 +91,28 @@ class lose(linear):
                 j += 1
             i += 1
 
+    # 計算 梯度下降
+    def computed_gradient(self, wInit = 0, bInit = 0, iteration = 1000, learning_rate = 0.001):
+        w = wInit
+        b = bInit
+        for i in range(iteration):
+            w_gradient, b_gradient = self.gradientFunction(w, b)
+
+            # 經過 梯度下降後 更新後的 w b
+            w = w - w_gradient * learning_rate
+            b = b - b_gradient * learning_rate
+
+            lose = self.loseFunction(w, b)
+
+            self.loseHistoryList.append(lose)
+            self.wHistoryList.append(w)
+            self.bHistoryList.append(b)
+
+            if i % 1000 == 0:
+                print(f"iteration {i}  w: {w: .2e} b: {b: .2e} cost: {lose: .2e}")
+
     ## 繪圖 出 lose function
-    def draw(self, wRange):
+    def drawComputedLost(self, wRange):
         ax = self.plt.axes(projection = "3d")
         ax.xaxis.set_pane_color((0,0,0))
         ax.yaxis.set_pane_color((0,0,0))
@@ -97,13 +130,8 @@ class lose(linear):
 
         self.plt.show()
     
-    # 計算梯度下降
-    # w方向微分 後 = 2*x*(w*x + b) -y
-    # b方向微分 後 = 2*(w*x + b) -y
-    def computed_gradient(self, w, b):
-        w_gradient = 2 * self.x * (w * self.x + b) - self.y
-        b_gradient = 2 * (w * self.x + b) - self.y
-        print(w_gradient, b_gradient)
+    def drawComputedGredientDecent():
+        print()
 
 class DP:
     def __init__(self, x, y) -> None:
@@ -113,6 +141,7 @@ if __name__ == '__main__':
     data = pandas.read_csv(url)
     x = data['YearsExperience']
     y = data['Salary']
+    w = 0
+    b = 0
     dp = DP(x, y)
-    dp.lost.computed_gradient([-100, 101], [-100, 101])
-    # dp.lost.draw([-100, 101])
+    dp.lost.computed_gradient(w, b, 10000, 0.001)
