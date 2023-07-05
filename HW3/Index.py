@@ -83,6 +83,9 @@ Please refer to [PyTorch official website](https://pytorch.org/vision/stable/tra
 train_tfm = transforms.Compose([
     # Resize the image into a fixed shape (height = width = 128)
     transforms.Resize((128, 128)),
+    transforms.RandomHorizontalFlip(p = 1),
+    transforms.RandomVerticalFlip(p = 1),
+    transforms.RandomRotation(180),
     # You may add some transforms here.
     # ToTensor() should be the last one of the transforms.
     transforms.ToTensor(),
@@ -92,6 +95,9 @@ train_tfm = transforms.Compose([
 # All we need here is to resize the PIL image and transform it into Tensor.
 test_tfm = transforms.Compose([
     transforms.Resize((128, 128)),
+    transforms.RandomHorizontalFlip(p = 1),
+    transforms.RandomVerticalFlip(p = 1),
+    transforms.RandomRotation(180),
     transforms.ToTensor(),
 ])
 
@@ -154,13 +160,24 @@ class Classifier(nn.Module):
             nn.ReLU(),
             nn.MaxPool2d(2, 2, 0),
 
+            nn.Conv2d(128, 128, 3, 1, 1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2, 0),
+
             nn.Conv2d(128, 256, 3, 1, 1),
             nn.BatchNorm2d(256),
             nn.ReLU(),
             nn.MaxPool2d(4, 4, 0),
         )
         self.fc_layers = nn.Sequential(
-            nn.Linear(256 * 8 * 8, 256),
+            nn.Linear(256 * 8 * 8 * 8, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -227,175 +244,181 @@ def get_pseudo_labels(dataset, model, threshold=0.65):
     model.train()
     return dataset
 
-# "cuda" only when GPUs are available.
-device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Initialize a model, and put it on the device specified.
-model = Classifier().to(device)
-model.device = device
 
-# For the classification task, we use cross-entropy as the measurement of performance.
-criterion = nn.CrossEntropyLoss()
 
-# Initialize optimizer, you may fine-tune some hyperparameters such as learning rate on your own.
-optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, weight_decay=1e-5)
 
-# The number of training epochs.
-n_epochs = 80
 
-# Whether to do semi-supervised learning.
-do_semi = False
+if __name__ == '__main__':
+    # "cuda" only when GPUs are available.
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-for epoch in range(n_epochs):
-    # ---------- TODO ----------
-    # In each epoch, relabel the unlabeled dataset for semi-supervised learning.
-    # Then you can combine the labeled dataset and pseudo-labeled dataset for the training.
-    if do_semi:
-        # Obtain pseudo-labels for unlabeled data using trained model.
-        pseudo_set = get_pseudo_labels(unlabeled_set, model)
+    # Initialize a model, and put it on the device specified.
+    model = Classifier().to(device)
+    model.device = device
 
-        # Construct a new dataset and a data loader for training.
-        # This is used in semi-supervised learning only.
-        concat_dataset = ConcatDataset([train_set, pseudo_set])
-        train_loader = DataLoader(concat_dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    # For the classification task, we use cross-entropy as the measurement of performance.
+    criterion = nn.CrossEntropyLoss()
 
-    # ---------- Training ----------
-    # Make sure the model is in train mode before training.
-    model.train()
+    # Initialize optimizer, you may fine-tune some hyperparameters such as learning rate on your own.
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, weight_decay=1e-5)
 
-    # These are used to record information in training.
-    train_loss = []
-    train_accs = []
+    # The number of training epochs.
+    n_epochs = 80
 
-    # Iterate the training set by batches.
-    for batch in tqdm(train_loader):
+    # Whether to do semi-supervised learning.
+    do_semi = True
 
-        # A batch consists of image data and corresponding labels.
-        imgs, labels = batch
+    for epoch in range(n_epochs):
+        # ---------- TODO ----------
+        # In each epoch, relabel the unlabeled dataset for semi-supervised learning.
+        # Then you can combine the labeled dataset and pseudo-labeled dataset for the training.
+        if do_semi:
+            # Obtain pseudo-labels for unlabeled data using trained model.
+            pseudo_set = get_pseudo_labels(unlabeled_set, model)
 
-        # Forward the data. (Make sure data and model are on the same device.)
-        logits = model(imgs.to(device))
+            # Construct a new dataset and a data loader for training.
+            # This is used in semi-supervised learning only.
+            concat_dataset = ConcatDataset([train_set, pseudo_set])
+            train_loader = DataLoader(concat_dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
 
-        # Calculate the cross-entropy loss.
-        # We don't need to apply softmax before computing cross-entropy as it is done automatically.
-        loss = criterion(logits, labels.to(device))
+        # ---------- Training ----------
+        # Make sure the model is in train mode before training.
+        model.train()
 
-        # Gradients stored in the parameters in the previous step should be cleared out first.
-        optimizer.zero_grad()
+        # These are used to record information in training.
+        train_loss = []
+        train_accs = []
 
-        # Compute the gradients for parameters.
-        loss.backward()
+        # Iterate the training set by batches.
+        for batch in tqdm(train_loader):
 
-        # Clip the gradient norms for stable training.
-        grad_norm = nn.utils.clip_grad_norm_(model.parameters(), max_norm=10)
+            # A batch consists of image data and corresponding labels.
+            imgs, labels = batch
 
-        # Update the parameters with computed gradients.
-        optimizer.step()
+            # Forward the data. (Make sure data and model are on the same device.)
+            logits = model(imgs.to(device))
 
-        # Compute the accuracy for current batch.
-        acc = (logits.argmax(dim=-1) == labels.to(device)).float().mean()
+            # Calculate the cross-entropy loss.
+            # We don't need to apply softmax before computing cross-entropy as it is done automatically.
+            loss = criterion(logits, labels.to(device))
 
-        # Record the loss and accuracy.
-        train_loss.append(loss.item())
-        train_accs.append(acc)
+            # Gradients stored in the parameters in the previous step should be cleared out first.
+            optimizer.zero_grad()
 
-    # The average loss and accuracy of the training set is the average of the recorded values.
-    train_loss = sum(train_loss) / len(train_loss)
-    train_acc = sum(train_accs) / len(train_accs)
+            # Compute the gradients for parameters.
+            loss.backward()
 
-    # Print the information.
-    print(f"[ Train | {epoch + 1:03d}/{n_epochs:03d} ] loss = {train_loss:.5f}, acc = {train_acc:.5f}")
+            # Clip the gradient norms for stable training.
+            grad_norm = nn.utils.clip_grad_norm_(model.parameters(), max_norm=10)
 
-    # ---------- Validation ----------
-    # Make sure the model is in eval mode so that some modules like dropout are disabled and work normally.
+            # Update the parameters with computed gradients.
+            optimizer.step()
+
+            # Compute the accuracy for current batch.
+            acc = (logits.argmax(dim=-1) == labels.to(device)).float().mean()
+
+            # Record the loss and accuracy.
+            train_loss.append(loss.item())
+            train_accs.append(acc)
+
+        # The average loss and accuracy of the training set is the average of the recorded values.
+        train_loss = sum(train_loss) / len(train_loss)
+        train_acc = sum(train_accs) / len(train_accs)
+
+        # Print the information.
+        print(f"[ Train | {epoch + 1:03d}/{n_epochs:03d} ] loss = {train_loss:.5f}, acc = {train_acc:.5f}")
+
+        # ---------- Validation ----------
+        # Make sure the model is in eval mode so that some modules like dropout are disabled and work normally.
+        model.eval()
+
+        # These are used to record information in validation.
+        valid_loss = []
+        valid_accs = []
+
+        # Iterate the validation set by batches.
+        for batch in tqdm(valid_loader):
+
+            # A batch consists of image data and corresponding labels.
+            imgs, labels = batch
+
+            # We don't need gradient in validation.
+            # Using torch.no_grad() accelerates the forward process.
+            with torch.no_grad():
+                logits = model(imgs.to(device))
+
+            # We can still compute the loss (but not the gradient).
+            loss = criterion(logits, labels.to(device))
+
+            # Compute the accuracy for current batch.
+            acc = (logits.argmax(dim=-1) == labels.to(device)).float().mean()
+
+            # Record the loss and accuracy.
+            valid_loss.append(loss.item())
+            valid_accs.append(acc)
+
+        # The average loss and accuracy for entire validation set is the average of the recorded values.
+        valid_loss = sum(valid_loss) / len(valid_loss)
+        valid_acc = sum(valid_accs) / len(valid_accs)
+
+        # Print the information.
+        print(f"[ Valid | {epoch + 1:03d}/{n_epochs:03d} ] loss = {valid_loss:.5f}, acc = {valid_acc:.5f}")
+
+    """## **Testing**
+
+    For inference, we need to make sure the model is in eval mode, and the order of the dataset should not be shuffled ("shuffle=False" in test_loader).
+
+    Last but not least, don't forget to save the predictions into a single CSV file.
+    The format of CSV file should follow the rules mentioned in the slides.
+
+    ### **WARNING -- Keep in Mind**
+
+    Cheating includes but not limited to:
+    1.   using testing labels,
+    2.   submitting results to previous Kaggle competitions,
+    3.   sharing predictions with others,
+    4.   copying codes from any creatures on Earth,
+    5.   asking other people to do it for you.
+
+    Any violations bring you punishments from getting a discount on the final grade to failing the course.
+
+    It is your responsibility to check whether your code violates the rules.
+    When citing codes from the Internet, you should know what these codes exactly do.
+    You will **NOT** be tolerated if you break the rule and claim you don't know what these codes do.
+
+    """
+
+    # Make sure the model is in eval mode.
+    # Some modules like Dropout or BatchNorm affect if the model is in training mode.
     model.eval()
 
-    # These are used to record information in validation.
-    valid_loss = []
-    valid_accs = []
+    # Initialize a list to store the predictions.
+    predictions = []
 
-    # Iterate the validation set by batches.
-    for batch in tqdm(valid_loader):
-
+    # Iterate the testing set by batches.
+    for batch in tqdm(test_loader):
         # A batch consists of image data and corresponding labels.
+        # But here the variable "labels" is useless since we do not have the ground-truth.
+        # If printing out the labels, you will find that it is always 0.
+        # This is because the wrapper (DatasetFolder) returns images and labels for each batch,
+        # so we have to create fake labels to make it work normally.
         imgs, labels = batch
 
-        # We don't need gradient in validation.
+        # We don't need gradient in testing, and we don't even have labels to compute loss.
         # Using torch.no_grad() accelerates the forward process.
         with torch.no_grad():
-          logits = model(imgs.to(device))
+            logits = model(imgs.to(device))
 
-        # We can still compute the loss (but not the gradient).
-        loss = criterion(logits, labels.to(device))
+        # Take the class with greatest logit as prediction and record it.
+        predictions.extend(logits.argmax(dim=-1).cpu().numpy().tolist())
 
-        # Compute the accuracy for current batch.
-        acc = (logits.argmax(dim=-1) == labels.to(device)).float().mean()
+    # Save predictions into the file.
+    with open("predict.csv", "w") as f:
 
-        # Record the loss and accuracy.
-        valid_loss.append(loss.item())
-        valid_accs.append(acc)
+        # The first row must be "Id, Category"
+        f.write("Id,Category\n")
 
-    # The average loss and accuracy for entire validation set is the average of the recorded values.
-    valid_loss = sum(valid_loss) / len(valid_loss)
-    valid_acc = sum(valid_accs) / len(valid_accs)
-
-    # Print the information.
-    print(f"[ Valid | {epoch + 1:03d}/{n_epochs:03d} ] loss = {valid_loss:.5f}, acc = {valid_acc:.5f}")
-
-"""## **Testing**
-
-For inference, we need to make sure the model is in eval mode, and the order of the dataset should not be shuffled ("shuffle=False" in test_loader).
-
-Last but not least, don't forget to save the predictions into a single CSV file.
-The format of CSV file should follow the rules mentioned in the slides.
-
-### **WARNING -- Keep in Mind**
-
-Cheating includes but not limited to:
-1.   using testing labels,
-2.   submitting results to previous Kaggle competitions,
-3.   sharing predictions with others,
-4.   copying codes from any creatures on Earth,
-5.   asking other people to do it for you.
-
-Any violations bring you punishments from getting a discount on the final grade to failing the course.
-
-It is your responsibility to check whether your code violates the rules.
-When citing codes from the Internet, you should know what these codes exactly do.
-You will **NOT** be tolerated if you break the rule and claim you don't know what these codes do.
-
-"""
-
-# Make sure the model is in eval mode.
-# Some modules like Dropout or BatchNorm affect if the model is in training mode.
-model.eval()
-
-# Initialize a list to store the predictions.
-predictions = []
-
-# Iterate the testing set by batches.
-for batch in tqdm(test_loader):
-    # A batch consists of image data and corresponding labels.
-    # But here the variable "labels" is useless since we do not have the ground-truth.
-    # If printing out the labels, you will find that it is always 0.
-    # This is because the wrapper (DatasetFolder) returns images and labels for each batch,
-    # so we have to create fake labels to make it work normally.
-    imgs, labels = batch
-
-    # We don't need gradient in testing, and we don't even have labels to compute loss.
-    # Using torch.no_grad() accelerates the forward process.
-    with torch.no_grad():
-        logits = model(imgs.to(device))
-
-    # Take the class with greatest logit as prediction and record it.
-    predictions.extend(logits.argmax(dim=-1).cpu().numpy().tolist())
-
-# Save predictions into the file.
-with open("predict.csv", "w") as f:
-
-    # The first row must be "Id, Category"
-    f.write("Id,Category\n")
-
-    # For the rest of the rows, each image id corresponds to a predicted class.
-    for i, pred in  enumerate(predictions):
-         f.write(f"{i},{pred}\n")
+        # For the rest of the rows, each image id corresponds to a predicted class.
+        for i, pred in  enumerate(predictions):
+            f.write(f"{i},{pred}\n")
