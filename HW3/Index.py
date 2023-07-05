@@ -160,18 +160,13 @@ class Classifier(nn.Module):
             nn.ReLU(),
             nn.MaxPool2d(2, 2, 0),
 
-            nn.Conv2d(128, 128, 3, 1, 1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.MaxPool2d(2, 2, 0),
-
             nn.Conv2d(128, 256, 3, 1, 1),
             nn.BatchNorm2d(256),
             nn.ReLU(),
             nn.MaxPool2d(4, 4, 0),
         )
         self.fc_layers = nn.Sequential(
-            nn.Linear(256 * 8 * 8 * 8, 256),
+            nn.Linear(256 * 8 * 8, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
