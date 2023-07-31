@@ -53,8 +53,8 @@ unlabeled_set = DatasetFolder("food-11/training/unlabeled", loader=lambda x: Ima
 test_set = DatasetFolder("food-11/testing", loader=lambda x: Image.open(x), extensions="jpg", transform=test_tfm)
 
 # Construct data loaders.
-train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=False)
-valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=False)
+train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=False)
+valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=False)
 test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
 class Classifier(nn.Module):
@@ -203,7 +203,7 @@ if __name__ == '__main__':
             # Construct a new dataset and a data loader for training.
             # This is used in semi-supervised learning only.
             concat_dataset = ConcatDataset([train_set, pseudo_set])
-            train_loader = DataLoader(concat_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=False)
+            train_loader = DataLoader(concat_dataset, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=False)
 
         # ---------- Training ----------
         # Make sure the model is in train mode before training.
