@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
+import torchvision.models as visionModels
 from PIL import Image
 # "ConcatDataset" and "Subset" are possibly useful when doing semi-supervised learning.
 from torch.utils.data import ConcatDataset, DataLoader, Subset
@@ -98,6 +99,7 @@ class Classifier(nn.Module):
             nn.BatchNorm2d(256),
             nn.ReLU(),
             nn.MaxPool2d(4, 4, 0),
+
         )
         self.fc_layers = nn.Sequential(
             nn.Linear(256 * 8 * 8, 256),
@@ -120,6 +122,22 @@ class Classifier(nn.Module):
         # The features are transformed by fully-connected layers to obtain the final logits.
         x = self.fc_layers(x)
         return x
+
+
+
+class CustomSubset(Subset):
+    '''A custom subset class'''
+    def __init__(self, dataset, indices):
+        super().__init__(dataset, indices)
+        self.targets = dataset.targets # 保留targets属性
+        self.classes = dataset.classes # 保留classes属性
+ 
+    def __getitem__(self, idx): #同时支持索引访问操作
+        x, y = self.dataset[self.indices[idx]]      
+        return x, y 
+ 
+    def __len__(self): # 同时支持取长度操作
+        return len(self.indices)
 
 """## **Training**
 
@@ -147,7 +165,7 @@ def get_pseudo_labels(dataset, model, threshold=0.65):
     model.eval()
     # Define softmax function.
     softmax = nn.Softmax(dim=-1)
-    
+    relabels = torch.as_tensor([]).cuda()
     # Iterate over the dataset by batches.
     for batch in tqdm(data_loader):
         img, _ = batch
@@ -164,10 +182,11 @@ def get_pseudo_labels(dataset, model, threshold=0.65):
         # Filter the data and construct a new dataset.
 
         probs = torch.where(probs > threshold, probs, 0)
-        dataset.targets.append(probs)
+        relabels = torch.cat((relabels, probs), 0)
+        # dataset.targets.append(probs)
     # # Turn off the eval mode.
     model.train()
-    return dataset
+    return Subset(dataset, relabels)
 
 if __name__ == '__main__':
     # print("cuda" if torch.cuda.is_available() else "cpu")
@@ -191,7 +210,7 @@ if __name__ == '__main__':
     n_epochs = 80
 
     # Whether to do semi-supervised learning.
-    do_semi = True
+    do_semi = False
     for epoch in range(n_epochs):
         # ---------- TODO ----------
         # In each epoch, relabel the unlabeled dataset for semi-supervised learning.
