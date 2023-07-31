@@ -43,7 +43,7 @@ test_tfm = transforms.Compose([
 # Batch size for training, validation, and testing.
 # A greater batch size usually gives a more stable gradient.
 # But the GPU memory is limited, so please adjust it carefully.
-batch_size = 128
+batch_size = 40
 
 # Construct datasets.
 # The argument "loader" tells how torchvision reads the data.
