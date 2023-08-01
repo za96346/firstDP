@@ -82,21 +82,6 @@ class Classifier(nn.Module):
 
             nn.Conv2d(256, 128, 3, 1, 1),
             nn.BatchNorm2d(128),
-
-            nn.Conv2d(128, 256, 3, 1, 1),
-            nn.BatchNorm2d(256),
-
-            nn.Conv2d(256, 128, 3, 1, 1),
-            nn.BatchNorm2d(128),
-
-            nn.Conv2d(128, 256, 3, 1, 1),
-            nn.BatchNorm2d(256),
-
-            nn.Conv2d(256, 128, 3, 1, 1),
-            nn.BatchNorm2d(128),
-
-            nn.Conv2d(128, 256, 3, 1, 1),
-            nn.BatchNorm2d(256),
             nn.ReLU(),
             nn.MaxPool2d(4, 4, 0),
 
@@ -157,7 +142,8 @@ def get_pseudo_labels(dataset, model, threshold=0.65):
     # It returns an instance of DatasetFolder containing images whose prediction confidences exceed a given threshold.
     # You are NOT allowed to use any models trained on external data for pseudo-labeling.
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
+    remove_index, index = [], 0
+    train_set = []
     # Construct a data loader.
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
@@ -180,13 +166,20 @@ def get_pseudo_labels(dataset, model, threshold=0.65):
 
         # ---------- TODO ----------
         # Filter the data and construct a new dataset.
+        if torch.max(probs).item() > threshold:
+            train_set = ConcatDataset([
+                train_set,
+                [(img, torch.argmax(probs).item())]
+            ])
 
-        probs = torch.where(probs > threshold, probs, 0)
-        relabels = torch.cat((relabels, probs), 0)
+        index += 1
+        # probs = torch.where(probs > threshold, probs, 0)
+        # relabels = torch.cat((relabels, probs), 0)
         # dataset.targets.append(probs)
     # # Turn off the eval mode.
     model.train()
-    return Subset(dataset, relabels)
+    print(f"[{len(train_set)-3080}/6786] images have been labeled.")
+    return train_set
 
 if __name__ == '__main__':
     # print("cuda" if torch.cuda.is_available() else "cpu")
