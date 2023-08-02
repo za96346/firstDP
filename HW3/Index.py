@@ -46,6 +46,8 @@ test_tfm = transforms.Compose([
 # But the GPU memory is limited, so please adjust it carefully.
 batch_size = 40
 
+num_workers=2
+
 # Construct datasets.
 # The argument "loader" tells how torchvision reads the data.
 train_set = DatasetFolder("food-11/training/labeled", loader=lambda x: Image.open(x), extensions="jpg", transform=train_tfm)
@@ -54,8 +56,8 @@ unlabeled_set = DatasetFolder("food-11/training/unlabeled", loader=lambda x: Ima
 test_set = DatasetFolder("food-11/testing", loader=lambda x: Image.open(x), extensions="jpg", transform=test_tfm)
 
 # Construct data loaders.
-train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=False)
-valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=False)
+train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=False)
+valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=False)
 test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
 class Classifier(nn.Module):
@@ -79,12 +81,8 @@ class Classifier(nn.Module):
 
             nn.Conv2d(128, 256, 3, 1, 1),
             nn.BatchNorm2d(256),
-
-            nn.Conv2d(256, 128, 3, 1, 1),
-            nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.MaxPool2d(4, 4, 0),
-
         )
         self.fc_layers = nn.Sequential(
             nn.Linear(256 * 8 * 8, 256),
@@ -136,14 +134,16 @@ For more details about semi-supervised learning, please refer to [Prof. Lee's sl
 
 Again, please notice that utilizing external data (or pre-trained model) for training is **prohibited**.
 """
+relabels = torch.as_tensor([]).cuda()
+
 
 def get_pseudo_labels(dataset, model, threshold=0.65):
     # This functions generates pseudo-labels of a dataset using given model.
     # It returns an instance of DatasetFolder containing images whose prediction confidences exceed a given threshold.
     # You are NOT allowed to use any models trained on external data for pseudo-labeling.
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    remove_index, index = [], 0
-    train_set = []
+
+    result = []
     # Construct a data loader.
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
@@ -151,7 +151,7 @@ def get_pseudo_labels(dataset, model, threshold=0.65):
     model.eval()
     # Define softmax function.
     softmax = nn.Softmax(dim=-1)
-    relabels = torch.as_tensor([]).cuda()
+
     # Iterate over the dataset by batches.
     for batch in tqdm(data_loader):
         img, _ = batch
@@ -163,23 +163,18 @@ def get_pseudo_labels(dataset, model, threshold=0.65):
 
         # Obtain the probability distributions by applying softmax on logits.
         probs = softmax(logits)
+        # print('img => ', img.shape)
+        # print('logits =>', logits.shape)
+        # print('probs => ', probs.shape)
 
         # ---------- TODO ----------
         # Filter the data and construct a new dataset.
         if torch.max(probs).item() > threshold:
-            train_set = ConcatDataset([
-                train_set,
-                [(img, torch.argmax(probs).item())]
-            ])
+            result.append(torch.argmax(probs).item())
 
-        index += 1
-        # probs = torch.where(probs > threshold, probs, 0)
-        # relabels = torch.cat((relabels, probs), 0)
-        # dataset.targets.append(probs)
     # # Turn off the eval mode.
     model.train()
-    print(f"[{len(train_set)-3080}/6786] images have been labeled.")
-    return train_set
+    return result
 
 if __name__ == '__main__':
     # print("cuda" if torch.cuda.is_available() else "cpu")
@@ -203,7 +198,7 @@ if __name__ == '__main__':
     n_epochs = 80
 
     # Whether to do semi-supervised learning.
-    do_semi = False
+    do_semi = True
     for epoch in range(n_epochs):
         # ---------- TODO ----------
         # In each epoch, relabel the unlabeled dataset for semi-supervised learning.
@@ -215,7 +210,7 @@ if __name__ == '__main__':
             # Construct a new dataset and a data loader for training.
             # This is used in semi-supervised learning only.
             concat_dataset = ConcatDataset([train_set, pseudo_set])
-            train_loader = DataLoader(concat_dataset, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=False)
+            train_loader = DataLoader(concat_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=False)
 
         # ---------- Training ----------
         # Make sure the model is in train mode before training.
