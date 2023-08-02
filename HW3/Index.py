@@ -170,7 +170,7 @@ def get_pseudo_labels(dataset, model, threshold=0.65):
         # ---------- TODO ----------
         # Filter the data and construct a new dataset.
         if torch.max(probs).item() > threshold:
-            result.append(torch.argmax(probs).item())
+            result.append(torch.argmax(probs))
 
     # # Turn off the eval mode.
     model.train()
@@ -219,6 +219,8 @@ if __name__ == '__main__':
         # These are used to record information in training.
         train_loss = []
         train_accs = []
+
+        print("loader len => ", len(train_loader))
 
         # Iterate the training set by batches.
         for batch in tqdm(train_loader):
